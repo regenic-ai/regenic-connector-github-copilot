@@ -29,7 +29,7 @@ Authentication is handled by the official SDK using the Copilot account configur
 
 After enabling execution, use **Engine → Executors → Local connector → Install** and select this connector installation. The equivalent API is `POST /v1/me/executors` with `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`. Use the returned executor `id` as the recipe's `executor_type`; do not put an installation ID in recipe configuration.
 
-This package targets `@github/copilot-sdk@1.0.28` and requires Regenic's direct-executor installation support plus `@regenic/connector-contract@^0.3.0`. Contract 0.3.0 is currently an unpublished candidate: registry installation and a registry-resolved lockfile remain blocked until publication. Candidate-package checks are not registry installation validation.
+This package targets `@github/copilot-sdk@1.0.28` and requires Regenic's direct-executor installation support plus published `@regenic/connector-contract@^0.3.0`. The committed lockfile resolves public registry packages.
 
 ## Permission and workspace boundary
 
@@ -79,7 +79,7 @@ Tests use a fake SDK client and generated event fixtures; they do not authentica
 
 启用执行后，在 **Engine → Executors → Local connector → Install** 中选择该连接器安装。等价 API 为 `POST /v1/me/executors`，请求体为 `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`。将返回的 executor `id` 用作 recipe 的 `executor_type`，不要在 recipe 配置中填写安装 ID。
 
-本包针对 `@github/copilot-sdk@1.0.28`，依赖 Regenic 的 direct-executor 安装支持及 `@regenic/connector-contract@^0.3.0`。目前 contract 0.3.0 尚为未发布候选；registry 安装和对应 lockfile 需等正式发布，候选包验证不等于 registry 安装验证。
+本包针对 `@github/copilot-sdk@1.0.28`，依赖 Regenic 的 direct-executor 安装支持及已发布的 `@regenic/connector-contract@^0.3.0`。已提交的 lockfile 使用公共 registry 包。
 
 ### 权限与工作区边界
 
