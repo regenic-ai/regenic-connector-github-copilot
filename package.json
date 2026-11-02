@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc --noEmit --strict --skipLibCheck --module NodeNext --target ES2022 test/sdk-types.cts",
     "test": "pnpm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
@@ -47,11 +47,13 @@
     "@regenic/connector-test-utils": "0.1.0",
     "@regenic/plugin-host": "0.1.0",
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "zod": "4.6.7"
   },
   "pnpm": {
     "overrides": {
-      "@regenic/connector-test-utils>@regenic/connector-contract": "^0.3.0"
+      "@regenic/connector-test-utils>@regenic/connector-contract": "^0.3.0",
+      "@github/copilot-sdk@1.0.28>zod": "4.6.7"
     }
   }
 }

@@ -28,6 +28,7 @@ export async function createCopilotClient(
   paths: CopilotPaths,
 ): Promise<CopilotClientType> {
   const options: CopilotClientOptions = {
+    connection: { kind: "stdio" },
     mode: "empty",
     baseDirectory: paths.copilotHome,
     workingDirectory: paths.workingDirectory,

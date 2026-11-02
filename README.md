@@ -11,6 +11,22 @@ Local connector and task executor for the **GitHub Copilot CLI SDK**. This packa
 
 This connector does not create chat threads or send replies. The SDK's `getEvents()` API returns a session's full event history; the connector limits records delivered per poll but currently must read that full history for each poll.
 
+## Install from this repository
+
+Use the repository as the plugin deployment root so its scoped dependency override and lockfile remain effective:
+
+```sh
+git clone https://github.com/regenic-ai/regenic-connector-github-copilot.git
+cd regenic-connector-github-copilot
+pnpm install --frozen-lockfile
+pnpm run build
+pnpm audit --prod
+```
+
+Set `REGENIC_CHANNEL_PLUGIN` to the absolute path of this built repository when starting the Regenic API. Its local plugin loader reads the package manifest and synchronous entry point. Keep this repository's `node_modules` alongside the build; do not copy only `dist` into another dependency root.
+
+**Direct npm/tarball installation into an arbitrary application is not recommended without a root-level scoped override and a clean production audit.** Package consumers do not inherit this repository's overrides. See the dependency compatibility requirements below. This connector is not being published to npm as part of this change.
+
 ## Configure an installation
 
 Set the following fields in the Regenic GitHub Copilot CLI installation:
@@ -30,6 +46,14 @@ Authentication is handled by the official SDK using the Copilot account configur
 After enabling execution, use **Engine → Executors → Local connector → Install** and select this connector installation. The equivalent API is `POST /v1/me/executors` with `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`. Use the returned executor `id` as the recipe's `executor_type`; do not put an installation ID in recipe configuration.
 
 This package targets `@github/copilot-sdk@1.0.28` and requires Regenic's direct-executor installation support plus published `@regenic/connector-contract@^0.3.0`. The committed lockfile resolves public registry packages.
+
+### SDK dependency compatibility
+
+The latest stable SDK 1.0.28 pins Zod 4.3.6, affected by GHSA-mrhx-c7xc-m3w5. This repository applies only `@github/copilot-sdk@1.0.28>zod: 4.6.7` in pnpm overrides, not a global override. Offline tests exercise the real SDK's CommonJS/ESM tool-schema conversion, structured-result parsing and public schema types with Zod 4.6.7. SDK 1.0.29-preview.1 declares the patched Zod but also changes other dependencies; this package does not switch to that prerelease.
+
+**Dependency overrides do not propagate from a published package to its consumers.** Until a compatible stable SDK fixes its dependency, the installing application's root manifest must apply the same scoped override (or the package manager's equivalent) and verify its own production audit. This repository's clean audit is not proof that an arbitrary consumer resolves the patched dependency.
+
+The connector explicitly selects the SDK's child-process `stdio` transport. `koffi` is required by the SDK's separate experimental in-process FFI transport, loaded lazily; that transport is not supported here. An ignored `koffi` build script is not a stdio prerequisite, but the platform-specific SDK runtime package and OS prerequisites still are. Tests do not launch the bundled runtime or validate live subprocess cleanup.
 
 ## Permission and workspace boundary
 
@@ -71,6 +95,12 @@ Tests use a fake SDK client and generated event fixtures; they do not authentica
 
 连接器不创建聊天线程，也不代发回复。SDK `getEvents()` 会返回完整会话事件；连接器限制每次 poll 交付的记录数量，但目前每次 poll 仍需读取完整事件历史。
 
+### 从本仓库安装
+
+克隆本仓库，在仓库根目录依次运行 `pnpm install --frozen-lockfile`、`pnpm run build` 和 `pnpm audit --prod`，保留定向 override 和 lockfile。启动 Regenic API 时，将 `REGENIC_CHANNEL_PLUGIN` 设为该已构建仓库的绝对路径；宿主本地插件 loader 读取包 manifest 和同步入口。保留仓库旁的 `node_modules`，不要仅将 `dist` 复制到另一依赖根目录。
+
+**不推荐在未配置安装方根级定向 override、未通过生产审计时直接将 npm/tarball 包安装进任意应用。** 安装方不会继承本仓库的 override；具体要求见下方依赖兼容性说明。本次变更不发布连接器到 npm。
+
 ### 安装配置
 
 配置 `copilot_home`（已配置官方 SDK 的绝对路径）、`state_dir`（连接器私有状态目录）和 `working_directory`（已存在的工作区）。私有状态目录由连接器以仅所有者可访问权限创建，不能与 Copilot home 或工作区重叠。`sync_enabled` 与 `execution_enabled` 均默认关闭。启用执行时必须配置精确的 `builtin:<name>` 工具白名单；不接受通配符、MCP、自定义工具或插件工具。权限提示超时默认五分钟，可设为 1,000–900,000 毫秒。
@@ -80,6 +110,14 @@ Tests use a fake SDK client and generated event fixtures; they do not authentica
 启用执行后，在 **Engine → Executors → Local connector → Install** 中选择该连接器安装。等价 API 为 `POST /v1/me/executors`，请求体为 `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`。将返回的 executor `id` 用作 recipe 的 `executor_type`，不要在 recipe 配置中填写安装 ID。
 
 本包针对 `@github/copilot-sdk@1.0.28`，依赖 Regenic 的 direct-executor 安装支持及已发布的 `@regenic/connector-contract@^0.3.0`。已提交的 lockfile 使用公共 registry 包。
+
+### SDK 依赖兼容性
+
+最新稳定 SDK 1.0.28 固定使用受 GHSA-mrhx-c7xc-m3w5 影响的 Zod 4.3.6。本仓库仅对 `@github/copilot-sdk@1.0.28>zod` 定向 override 至 4.6.7，不全局覆盖。离线测试使用真实 SDK 的 CommonJS/ESM 工具 schema 转换、结构化响应解析及公开 schema 类型验证兼容性。1.0.29-preview.1 已声明修复版 Zod，但同时修改其他依赖；本包不切换到该预发布版本。
+
+**发布包中的 override 不会自动传递给安装方。** 在兼容的稳定 SDK 修复依赖之前，安装应用必须在根 manifest 中配置相同定向 override（或包管理器的等价配置），并独立验证生产依赖审计；本仓库审计通过不代表任意安装方都会解析到修复版本。
+
+连接器明确选择子进程 `stdio` transport。SDK 仅在实验性进程内 FFI transport 中延迟加载 `koffi`，本连接器不支持该 transport，因此忽略 `koffi` 构建脚本不影响 stdio 的前置条件；但对应平台的 SDK runtime 包和操作系统前置条件仍然必需。测试不启动 bundled runtime，也未验证真实子进程清理。
 
 ### 权限与工作区边界
 
