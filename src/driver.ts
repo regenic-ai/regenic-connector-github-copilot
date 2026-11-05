@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import path from "node:path";
 import {
   ChannelDriverError,
@@ -14,9 +15,11 @@ import {
   stopActivation,
 } from "./activation";
 import { CONNECTOR_PROTOCOL, CONNECTOR_TYPE, SOURCE } from "./constants";
+import { copilotLocaleTables } from "./locales";
 import { readSessionEvents } from "./executor";
 import {
   configEnabled,
+  configText,
   parseToolAllowlist,
   readCopilotSettings,
 } from "./settings";
@@ -28,6 +31,13 @@ import type { OwnedSession } from "./store";
 
 const defaultPermissionTimeoutMs = 5 * 60_000;
 const eventPageSize = 100;
+const taskTools = [
+  "builtin:bash",
+  "builtin:ask_user",
+  "builtin:task",
+  "builtin:task_complete",
+  "builtin:skill",
+].join(", ");
 
 export const githubCopilotSessionDriver: ChannelDriver = {
   connector_type: CONNECTOR_TYPE,
@@ -85,63 +95,50 @@ export const githubCopilotSessionDriver: ChannelDriver = {
     };
   },
 
+  locales() {
+    return copilotLocaleTables;
+  },
+
   installCatalog() {
+    const workspace = {
+      key: "working_directory",
+      label: "field.workspace",
+      required: true,
+      placeholder: "field.workspace.placeholder",
+      widget: "directory" as const,
+    };
     return {
-      title: "GitHub Copilot CLI",
-      description:
-        "Read persisted sessions created by this connector and, when explicitly enabled, run Copilot tasks in a configured local workspace.",
-      credential_hint:
-        "Authentication is provided by the official Copilot CLI SDK using the account already configured in the selected Copilot home. This connector does not read or store tokens.",
-      channel_label: "GitHub Copilot CLI",
+      title: "catalog.title",
+      description: "catalog.description",
+      credential_hint: "catalog.credentialHint",
+      channel_label: "catalog.channelLabel",
+      bind_executor: true,
+      sync_unavailable_hint: "catalog.syncUnavailable",
       fields: [
+        workspace,
         {
-          key: "copilot_home",
-          label: "Copilot home directory",
-          required: true,
-          placeholder: "Absolute path to the configured Copilot home",
-        },
-        {
-          key: "state_dir",
-          label: "Connector state directory",
-          required: true,
-          placeholder: "Absolute path for connector-owned session metadata",
-        },
-        {
-          key: "working_directory",
-          label: "Workspace directory",
-          required: true,
-          placeholder: "Absolute path to the workspace Copilot may use",
-        },
-        {
-          key: "sync_enabled",
-          label: "Synchronize connector-created sessions",
-          default: "false",
-        },
-        {
-          key: "execution_enabled",
-          label: "Enable direct Copilot task execution",
-          default: "false",
-        },
-        {
-          key: "available_tools",
-          label: "Built-in tool allowlist",
-          required: true,
-          placeholder: "Comma-separated exact builtin:<name> tool names",
-          visible_when: { field: "execution_enabled", value: "true" },
-        },
-        {
-          key: "permission_timeout_ms",
-          label: "Permission prompt timeout (milliseconds)",
-          default: String(defaultPermissionTimeoutMs),
-          visible_when: { field: "execution_enabled", value: "true" },
+          key: "task_execution",
+          label: "field.tasks",
+          default: "off",
+          options: [
+            { value: "off", label: "field.tasks.off" },
+            { value: "on", label: "field.tasks.on" },
+          ],
         },
       ],
       install_confirm: {
-        when: { field: "execution_enabled", value: "true" },
-        warning:
-          "The configured workspace is not a sandbox. Only explicitly allowlisted built-in tools are exposed; permission requests are manual and default-deny. Some SDK-approved operations may not prompt.",
-        ack: "I understand this executes Copilot tasks in the configured workspace.",
+        when: { field: "task_execution", value: "on" },
+        warning: "confirm.warning",
+        ack: "confirm.ack",
       },
+    };
+  },
+
+  presentInstall(installation) {
+    const workspace = configText(installation.config, "working_directory");
+    return {
+      label: workspace ? { literal: workspace } : "present.pending",
+      detail: null,
     };
   },
 
@@ -273,8 +270,15 @@ function createStream(
 function normalizeInstallConfig(
   config: Record<string, unknown>,
 ): Record<string, JsonValue> {
-  const syncEnabled = configEnabled(config.sync_enabled);
-  const executionEnabled = configEnabled(config.execution_enabled);
+  const explicitTask = config.task_execution === "on" || config.task_execution === "off"
+    ? config.task_execution
+    : undefined;
+  const executionEnabled = explicitTask
+    ? explicitTask === "on"
+    : configEnabled(config.execution_enabled);
+  const syncEnabled = explicitTask
+    ? explicitTask === "on"
+    : configEnabled(config.sync_enabled);
   const rawPermissionTimeout = config.permission_timeout_ms;
   if (
     rawPermissionTimeout !== undefined &&
@@ -283,22 +287,27 @@ function normalizeInstallConfig(
   ) {
     throw new Error("permission_timeout_ms must be a whole number.");
   }
+  const providedTools = typeof config.available_tools === "string"
+    ? config.available_tools.trim()
+    : "";
   const normalized: Record<string, JsonValue> = {
+    task_execution: executionEnabled ? "on" : "off",
     sync_enabled: syncEnabled,
     execution_enabled: executionEnabled,
-    available_tools:
-      executionEnabled && typeof config.available_tools === "string"
-        ? config.available_tools.trim()
-        : "",
+    available_tools: explicitTask === "on" ? taskTools : executionEnabled ? providedTools : "",
     permission_timeout_ms: rawPermissionTimeout ?? defaultPermissionTimeoutMs,
+    copilot_home: textOr(config.copilot_home, path.join(homedir(), ".copilot")),
+    state_dir: textOr(config.state_dir, path.join(homedir(), ".regenic", "copilot-state")),
   };
-  for (const key of ["copilot_home", "state_dir", "working_directory"]) {
-    const value = config[key];
-    if (typeof value === "string") {
-      normalized[key] = value.trim();
-    }
+  const workspace = textOr(config.working_directory, "");
+  if (workspace) {
+    normalized.working_directory = workspace;
   }
   return normalized;
+}
+
+function textOr(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
 function validateInstallConfig(config: Record<string, JsonValue>): void {

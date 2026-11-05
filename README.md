@@ -25,25 +25,22 @@ pnpm audit --prod
 
 Set `REGENIC_CHANNEL_PLUGIN` to the absolute path of this built repository when starting the Regenic API. Its local plugin loader reads the package manifest and synchronous entry point. Keep this repository's `node_modules` alongside the build; do not copy only `dist` into another dependency root.
 
-**Direct npm/tarball installation into an arbitrary application is not recommended without a root-level scoped override and a clean production audit.** Package consumers do not inherit this repository's overrides. See the dependency compatibility requirements below. This connector is not being published to npm as part of this change.
+**Direct npm installation does not inherit this repository's dependency overrides.** Apply the same scoped override in the installing application and audit its production dependencies. See the dependency compatibility requirements below.
 
 ## Configure an installation
 
-Set the following fields in the Regenic GitHub Copilot CLI installation:
+The install form asks for two things:
 
 | Field | Requirement |
 | --- | --- |
-| `copilot_home` | Absolute path to an existing Copilot home configured for the official SDK. |
-| `state_dir` | Absolute path for connector-owned state. The connector creates it with owner-only permissions; it must not overlap the Copilot home or workspace. |
 | `working_directory` | Absolute path to an existing workspace. |
-| `sync_enabled` | Optional; defaults to `false`. Enables synchronization of connector-created sessions. |
-| `execution_enabled` | Optional; defaults to `false`. Explicitly enables direct task execution. |
-| `available_tools` | When execution is enabled, a comma- or newline-separated allowlist of exact `builtin:<name>` SDK tool names. Empty lists, wildcards, MCP, custom, and plugin tools are rejected. |
-| `permission_timeout_ms` | Optional; defaults to five minutes; accepted range is 1,000–900,000 milliseconds. |
+| `task_execution` | `off` (default) or `on`. `on` runs tasks in that folder, synchronizes the sessions this connector creates, and uses a fixed built-in tool allowlist. |
+
+When those paths are omitted, `copilot_home` defaults to `~/.copilot` and `state_dir` defaults to `~/.regenic/copilot-state`. The state directory is created with owner-only permissions and must not overlap the Copilot home or workspace. Older configs that set `execution_enabled`, `sync_enabled`, and `available_tools` directly are still accepted. `permission_timeout_ms` defaults to five minutes; the accepted range is 1,000–900,000 milliseconds. Empty tool lists, wildcards, MCP, custom, and plugin tools are rejected.
 
 Authentication is handled by the official SDK using the Copilot account configured for the selected home. This connector does not read or store account tokens. When a task runs, the SDK makes its normal service requests; installation discovery and catalog operations do not start a Copilot process.
 
-After enabling execution, use **Engine → Executors → Local connector → Install** and select this connector installation. The equivalent API is `POST /v1/me/executors` with `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`. Use the returned executor `id` as the recipe's `executor_type`; do not put an installation ID in recipe configuration.
+A host that honors the catalog's `bind_executor` flag pins a local executor when the installation is saved with tasks enabled. Otherwise use **Engine → Executors → Local connector → Install** and select this installation. The equivalent API is `POST /v1/me/executors` with `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`. Use the returned executor `id` as the recipe's `executor_type`; do not put an installation ID in recipe configuration.
 
 This package targets `@github/copilot-sdk@1.0.28` and requires Regenic's direct-executor installation support plus published `@regenic/connector-contract@^0.3.0`. The committed lockfile resolves public registry packages.
 
@@ -99,15 +96,15 @@ Tests use a fake SDK client and generated event fixtures; they do not authentica
 
 克隆本仓库，在仓库根目录依次运行 `pnpm install --frozen-lockfile`、`pnpm run build` 和 `pnpm audit --prod`，保留定向 override 和 lockfile。启动 Regenic API 时，将 `REGENIC_CHANNEL_PLUGIN` 设为该已构建仓库的绝对路径；宿主本地插件 loader 读取包 manifest 和同步入口。保留仓库旁的 `node_modules`，不要仅将 `dist` 复制到另一依赖根目录。
 
-**不推荐在未配置安装方根级定向 override、未通过生产审计时直接将 npm/tarball 包安装进任意应用。** 安装方不会继承本仓库的 override；具体要求见下方依赖兼容性说明。本次变更不发布连接器到 npm。
+**直接从 npm 安装不会继承本仓库的依赖 override。** 安装方需要自行配置相同的定向 override，并审计生产依赖。具体要求见下方依赖兼容性说明。
 
 ### 安装配置
 
-配置 `copilot_home`（已配置官方 SDK 的绝对路径）、`state_dir`（连接器私有状态目录）和 `working_directory`（已存在的工作区）。私有状态目录由连接器以仅所有者可访问权限创建，不能与 Copilot home 或工作区重叠。`sync_enabled` 与 `execution_enabled` 均默认关闭。启用执行时必须配置精确的 `builtin:<name>` 工具白名单；不接受通配符、MCP、自定义工具或插件工具。权限提示超时默认五分钟，可设为 1,000–900,000 毫秒。
+安装表单只有两项：`working_directory`（已存在的工作区绝对路径）和 `task_execution`（默认 `off`；设为 `on` 时在该目录执行任务、同步本连接器创建的会话，并使用固定的内置工具名单）。未填写时，`copilot_home` 默认为 `~/.copilot`，`state_dir` 默认为 `~/.regenic/copilot-state`。私有状态目录由连接器以仅所有者可访问权限创建，不能与 Copilot home 或工作区重叠。直接设置 `execution_enabled`、`sync_enabled` 和 `available_tools` 的旧配置仍然接受。权限提示超时默认五分钟，可设为 1,000–900,000 毫秒。不接受空名单、通配符、MCP、自定义工具或插件工具。
 
 认证由官方 SDK 使用所选 home 中已配置的 Copilot 账户处理；连接器不读取或保存账户 token。执行任务时 SDK 会按正常方式访问其服务；安装发现和目录查询不会启动 Copilot 进程。
 
-启用执行后，在 **Engine → Executors → Local connector → Install** 中选择该连接器安装。等价 API 为 `POST /v1/me/executors`，请求体为 `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`。将返回的 executor `id` 用作 recipe 的 `executor_type`，不要在 recipe 配置中填写安装 ID。
+宿主若识别目录中的 `bind_executor`，会在保存并打开任务执行时自动挂上本机执行器。否则在 **Engine → Executors → Local connector → Install** 中选择该连接器安装。等价 API 为 `POST /v1/me/executors`，请求体为 `{ "kind": "local_connector", "config": { "installation_id": "<connector-installation-id>" } }`。将返回的 executor `id` 用作 recipe 的 `executor_type`，不要在 recipe 配置中填写安装 ID。
 
 本包针对 `@github/copilot-sdk@1.0.28`，依赖 Regenic 的 direct-executor 安装支持及已发布的 `@regenic/connector-contract@^0.3.0`。已提交的 lockfile 使用公共 registry 包。
 

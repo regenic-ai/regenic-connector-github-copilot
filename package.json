@@ -1,6 +1,6 @@
 {
   "name": "@regenic/connector-github-copilot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Regenic connector for GitHub Copilot CLI SDK task sessions",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
